@@ -1,1 +1,77 @@
-no
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ai</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* Button Style */
+.btn {
+    position: fixed;
+    bottom: 20px;
+    padding: 12px 22px;
+    font-size: 16px;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    z-index: 9999;
+}
+
+/* Home Button - Bottom Left */
+.home-btn {
+    left: 20px;
+    background: #007bff;
+}
+
+/* Hack Menu Button - Bottom Right */
+.hack-btn {
+    right: 20px;
+    background: #28a745;
+}
+</style>
+</head>
+
+<body>
+
+<!-- 🔥 Page load হলে এই Home website fullscreen দেখাবে -->
+<iframe id="siteFrame"></iframe>
+
+<!-- Buttons -->
+<button class="btn home-btn" onclick="loadHome()">Home</button>
+<button class="btn hack-btn" onclick="loadHack()">Hack Menu</button>
+
+<script>
+const homeURL = "https://dkwin9.com/#/register?invitationCode=22738777260";   // ✅ Home Website
+const hackURL = "https://smart-ai-signal.web.app";    // Hack Menu Website
+
+// Page open হলে Home website auto load হবে
+window.onload = function () {
+    loadHome();
+};
+
+function loadHome() {
+    document.getElementById("siteFrame").src = homeURL;
+}
+
+function loadHack() {
+    document.getElementById("siteFrame").src = hackURL;
+}
+</script>
+
+</body>
+</html>
