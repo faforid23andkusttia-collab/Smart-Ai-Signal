@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>30s Signal Panel</title>
+
+<style>
+:root{
+  --card:#ffffff;
+  --muted:#777;
+}
+*{box-sizing:border-box;font-family:Inter,system-ui,sans-serif}
+body{
+  margin:0;min-height:100vh;display:flex;justify-content:center;
+  background:radial-gradient(circle,rgba(0,0,0,.2),#f6f7fb 60%)
+}
+.app{width:100%;max-width:390px;padding:16px}
+.status{text-align:center;font-size:13px;color:var(--muted)}
+
+/* ===== RGB GLOW CIRCLE ===== */
+.card{
+  position:relative;
+  margin:28px auto;
+  width:220px;
+  height:220px;
+  border-radius:50%;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  background:var(--card);
+  z-index:1;
+  box-shadow:
+    0 25px 60px rgba(0,0,0,.25),
+    inset 0 0 0 rgba(255,255,255,.6);
+}
+
+/* RGB animated ring */
+.card::before{
+  content:"";
+  position:absolute;
+  inset:-6px;
+  border-radius:50%;
+  background:linear-gradient(
+    45deg,
+    red,
+    orange,
+    yellow,
+    lime,
+    cyan,
+    blue,
+    magenta,
+    red
+  );
+  filter:blur(12px);
+  z-index:-1;
+  animation:rgbRotate 6s linear infinite;
+}
+
+/* inner white clean circle */
+.card::after{
+  content:"";
+  position:absolute;
+  inset:4px;
+  border-radius:50%;
+  background:white;
+  z-index:-1;
+}
+
+@keyframes rgbRotate{
+  0%{transform:rotate(0deg)}
+  100%{transform:rotate(360deg)}
+}
+
+.card h1{
+  margin:0;
+  font-size:42px;
+  letter-spacing:1px;
+}
+.card p{
+  margin-top:6px;
+  font-size:14px;
+  color:var(--muted);
+}
+
+.waiting{
+  color:#ff9800;
+}
+
+.info{
+  display:flex;
+  justify-content:space-between;
+  margin:16px 4px
+}
+.info span{font-size:12px;color:var(--muted)}
+.info strong{font-size:18px}
+
+.graph{
+  background:#fff;
+  border-radius:16px;
+  padding:12px;
+  box-shadow:0 10px 25px rgba(0,0,0,.15)
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <div class="status">🟢 Live 30s Signal</div>
+
+  <div class="card">
+    <h1 id="signalText">--</h1>
+    <p>Confidence: <strong id="confidence">--%</strong></p>
+  </div>
+
+  <div class="info">
+    <div>
+      <span>Period ID</span>
+      <strong id="period">----</strong>
+    </div>
+    <div>
+      <span>Time Left</span>
+      <strong id="time">--</strong>
+    </div>
+  </div>
+
+  <div class="graph">
+    <canvas id="chart" height="120"></canvas>
+  </div>
+
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const TIMEZONE="Asia/Dhaka";
+const API_30S="https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json";
+
+/* ELEMENTS */
+const timeEl=document.getElementById("time");
+const periodEl=document.getElementById("period");
+const signalEl=document.getElementById("signalText");
+const confidenceEl=document.getElementById("confidence");
+
+/* STATE */
+let cachedPeriod=null;
+let lastSignal=null;
+let failCount=0;
+let waitingUntil=0;
+
+/* DHAKA TIME */
+function getDhakaTime(){
+  return new Date(new Date().toLocaleString("en-US",{timeZone:TIMEZONE}));
+}
+
+/* COUNTDOWN */
+function updateCountdown(){
+  const sec=getDhakaTime().getSeconds();
+  timeEl.innerText=(30-(sec%30))+"s";
+}
+
+/* PERIOD SYNC */
+async function syncPeriodEverySecond(){
+  try{
+    const res=await fetch(API_30S);
+    const json=await res.json();
+    const list=json?.data?.list||[];
+    if(!list.length) return;
+
+    const apiPeriod=Number(list[0].issueNumber||list[0].issue||list[0].period);
+    if(cachedPeriod!==apiPeriod){
+      cachedPeriod=apiPeriod;
+      periodEl.innerText=apiPeriod+1;
+      fetchSignal();
+    }
+  }catch{}
+}
+
+/* SIGNAL LOGIC */
+async function fetchSignal(){
+  if(Date.now()<waitingUntil){
+    signalEl.innerText="WAITING";
+    signalEl.className="waiting";
+    confidenceEl.innerText="--%";
+    return;
+  }
+
+  try{
+    const res=await fetch(API_30S);
+    const json=await res.json();
+    const list=json?.data?.list||[];
+    if(!list.length) return;
+
+    const last13=list.slice(0,13);
+    let big=0,small=0;
+    last13.forEach(i=>Number(i.number)>=5?big++:small++);
+
+    let signal,conf;
+    if(big>small){signal="BIG";conf=Math.round(big/13*100);}
+    else if(small>big){signal="SMALL";conf=Math.round(small/13*100);}
+    else{signal=Number(last13[0].number)>=5?"BIG":"SMALL";conf=50;}
+
+    const lastResult=Number(last13[0].number)>=5?"BIG":"SMALL";
+
+    if(lastSignal){
+      lastResult!==lastSignal?failCount++:failCount=0;
+      if(failCount>=2){
+        waitingUntil=Date.now()+120000;
+        failCount=0;
+        lastSignal=null;
+        signalEl.innerText="WAITING";
+        signalEl.className="waiting";
+        confidenceEl.innerText="--%";
+        return;
+      }
+    }
+
+    lastSignal=signal;
+    signalEl.className="";
+    signalEl.innerText=signal;
+    confidenceEl.innerText=conf+"%";
+  }catch{}
+}
+
+/* GRAPH */
+const canvas=document.getElementById("chart");
+const ctx=canvas.getContext("2d");
+let data=Array.from({length:30},()=>Math.random()*40+40);
+
+function drawGraph(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let i=1;i<data.length;i++){
+    const x1=(i-1)/(data.length-1)*canvas.width;
+    const y1=canvas.height-data[i-1];
+    const x2=i/(data.length-1)*canvas.width;
+    const y2=canvas.height-data[i];
+    ctx.beginPath();
+    ctx.strokeStyle=data[i]>=data[i-1]?"#22c55e":"#ef4444";
+    ctx.lineWidth=2;
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.stroke();
+  }
+}
+setInterval(()=>{
+  data.push(Math.random()*40+40);
+  data.shift();
+  drawGraph();
+},800);
+
+/* INIT */
+setInterval(updateCountdown,1000);
+setInterval(syncPeriodEverySecond,1000);
+updateCountdown();
+syncPeriodEverySecond();
+fetchSignal();
+drawGraph();
+</script>
+
+</body>
+</html>
